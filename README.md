@@ -1,2 +1,2 @@
 # Meta-Seoul-App
-메타 서울 앱 관련 파일
+Metaverse Seoul app function implementation folder
