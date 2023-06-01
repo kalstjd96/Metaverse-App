@@ -1,7 +1,27 @@
 public class StampTourManager : MonoBehaviour
 {
+    private static StampTourManager instance;
+
+    public static StampTourManager Instance
+    {
+        get { return instance; }
+    }
+
     private int totalStamps = 5; // 총 스탬프 개수
     private int collectedStamps = 0; // 현재까지 모은 스탬프 개수
+
+    private void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
 
     private void Start()
     {
