@@ -1,11 +1,18 @@
+using UnityEngine;
+
 public class StampState : IStampState
 {
     private float waitTime = 5f; // 대기 시간 설정
     private float elapsedTime = 0f; // 경과 시간
-
-    public void Enter()
+    int enterNum = 0;
+    /// <summary>
+    /// Player가 지정된 영역에 진입 시
+    /// </summary>
+    public void Enter(int areaNum)
     {
         // 상태 진입 시 실행할 내용
+        Debug.Log("지정된 영역에 들어왔습니다. ");
+        enterNum = areaNum;
     }
 
     public void Update()
@@ -14,14 +21,21 @@ public class StampState : IStampState
 
         if (elapsedTime >= waitTime)
         {
-            // 스탬프 찍기 로직
-            // 스탬프 찍힌 후 다음 상태로 전환
-            Exit();
+            Debug.Log("타이머 " + elapsedTime);
+            Exit(true);
         }
     }
 
-    public void Exit()
+    public void Exit(bool isCompelete = false)
     {
-        // 상태 종료 시 실행할 내용
+        if (!isCompelete)
+        {
+            Debug.Log("영역을 벗어남 : " + elapsedTime);
+
+        }
+        
+        elapsedTime = 0f;
+        if (isCompelete) 
+            StampTourManager.Instance.CollectStamp(enterNum);
     }
 }
