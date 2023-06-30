@@ -1,6 +1,6 @@
 public interface IStampState
 {
-    void Enter();
+    void Enter(int areaNum);
     void Update();
-    void Exit();
+    void Exit(bool isCompelete = false);
 }
