@@ -1,2 +1,2 @@
-# Meta-Seoul-App
-Metaverse Seoul app function implementation folder
+# Meta-verse-App
+Metaverse *** app function implementation folder
