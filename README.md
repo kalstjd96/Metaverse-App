@@ -7,6 +7,8 @@
 
 -   [QR을 통한 딥링크 기능 구현](#qr-deeklink)
 -   [월드맵 기능 구현](#world-map)
+-   [TaxGPT 기능 구현](#taxgpt-chatting)
+-   [세금 조회 및 납부](#etax-inquiry)
     
 ## QR DeepLink
 
@@ -193,9 +195,10 @@ namespace SCM.Service.TaxSquare.ModelTaxPlayer
 ## World Map
 
 >사용된 스크립트<br/>
-> GraphicsLineRenderer.cs 
+> WorldMapController.cs, AZoneWorldMapState.cs
 
-데이터를 기반으로 Line Graph Viewer 기능을 구현하였습니다.
+택스스퀘어 내 월드맵 Viewer, 원하는 장소를 클릭하여 해당 장소로 이동하는 기능을 구현하였습니다.
+
 ```c#
 
 namespace SCM.Service.TaxSquare.Common.TaxWorldMap
@@ -346,8 +349,260 @@ namespace SCM.Service.TaxSquare.Common.TaxWorldMap
         }
     }
 }
+```
 
+ [TaxGPT 기능 구현](#taxgpt-chatting)
+    
+## TaxGPT Chatting
+
+>사용된 스크립트<br/>
+> TaxGptUI.cs
+
+챗 GPT와 같은 기능을 하는 현대 사회에 맞는 최신의 세금 정보를 알려주는 기능입니다.
+
+```c#
+
+...
+private IEnumerator GetRequest(TaxGPTAnswerItem answerItem, string question)
+{
+    yield return null;
+    string caseUrl = $"tax/chats/ask?query={UnityWebRequest.EscapeURL(question)}&streaming=true&chat_id=ecac18eb-0cbd-4963-9afb-39c510944c7e";
+    string url = $"{APIServerSettings.Instance.RootURL}{caseUrl}";
+    
+    using (UnityWebRequest webRequest = UnityWebRequest.Get(url))
+    {
+        webRequest.timeout = 60;
+
+        string token = TokenManager.Instance.AccessToken;
+        if (token is not null)
+            webRequest.SetRequestHeader("Authorization", token);
+
+        yield return webRequest.SendWebRequest();
+
+        StopCoroutine(cursorCoroutine);
+
+        if (webRequest.result != UnityWebRequest.Result.Success)
+            answerItem.SetItem("TaxGPT 연결이 끊겼습니다.<br>다시 시도하세요");
+        else
+        {
+            string responseJson = webRequest.downloadHandler.text;
+            string[] responseDataArray = responseJson.Split("data:");
+
+            foreach (string responseData in responseDataArray)
+            {
+                JSONObject jsonObject = new JSONObject(responseData);
+                if (jsonObject.HasField("result") && jsonObject.GetField("result").type == JSONObject.Type.STRING)
+                {
+                    string resultMsg = jsonObject.GetField("result").str;
+                    if (resultMsg != null)
+                    {
+                        string decodedString = Regex.Unescape(resultMsg);
+                        if (!responseData.Equals(responseDataArray[responseDataArray.Length - 1]))
+                            decodedString = AddRandomCharacter(decodedString);
+                        PrintAnswer(answerItem, decodedString);
+
+                        yield return new WaitForSeconds(0.1f);
+                    }
+                }
+            }
+        }
+
+        chatInput.interactable = true;
+        sendButton.interactable = true;
+    }
+}
+
+IEnumerator Cursor(TaxGPTAnswerItem chatbotAnswerItem)
+{
+    while (true)
+    {
+        chatbotAnswerItem.SetItem("|");
+        yield return new WaitForSeconds(0.5f);
+        chatbotAnswerItem.SetItem(" ");
+        yield return new WaitForSeconds(0.5f);
+    }
+}
+
+private string AddRandomCharacter(string isCursor)
+{
+    char randomChar = (char)Random.Range(0, 1);
+
+    if (randomChar != 0)
+        isCursor += "|";
+    else isCursor += "";
+
+    return isCursor;
+}
+...
 
 ```
-![GraphViewer](https://github.com/kalstjd96/Unity_CyberPlantAR/assets/47016363/4a15b007-6a0b-413e-bb4d-35d637f9f657)
 
+## ETax Inquiry
+
+>사용된 스크립트<br/>
+> ETaxInquiry.cs
+
+ETAX와 연계하여 나의 세금 정보를 조회하고 납부하는 기능을 구현하였습니다.
+
+```c#
+namespace SCM.Service.TaxSquare.ETax
+{
+    public class ETaxInquiry : MonoBehaviour
+    {
+        [SerializeField] private TMP_Text taxCount;
+        [SerializeField] private RectTransform listOpenImage;
+        [SerializeField] private RectTransform paymentListPanel;
+        ...
+
+        private bool isListOpen;
+        private string ETAXUrl = ;
+        float paymentListPanelOriginalPosition;
+
+        private void Awake() => Initialize();
+
+        private void Initialize()
+        {
+            isListOpen = false;
+            SetButtonOnClickListeners();
+            SetPaymentListPanelSize();
+        }
+
+        private void SetButtonOnClickListeners()
+        {
+            taxInquiryListViewButton.onClick.AddListener(InquiryListOpenButtonClick);
+            taxPaymentWebViewButton.onClick.AddListener(TaxPaymentWebViewOpen);
+        }
+
+        private void SetPaymentListPanelSize()
+        {
+            paymentListPanelOriginalPosition = paymentListPanel.rect.height;
+            paymentListPanel.sizeDelta = new Vector2(paymentListPanel.rect.width, 0);
+        }
+
+        private void OnDisable() => ResetListAndPanel();
+
+        private void ResetListAndPanel()
+        {
+            isListOpen = false;
+            paymentListPanel.gameObject.SetActive(false);
+            ClearTaxScrollViewContent();
+            ResetListOpenImageRotation();
+        }
+
+        private void ResetListOpenImageRotation()
+        {
+            if (listOpenImage.localEulerAngles.z != -180)
+            {
+                Vector3 rotation = listOpenImage.localEulerAngles;
+                rotation.z = -180;
+                listOpenImage.localEulerAngles = rotation;
+            }
+        }
+
+        public void GetTaxInquiryInformation(string jsonResponse) => LoadTaxInquiryInformation(jsonResponse);
+
+        private void LoadTaxInquiryInformation(string jsonResponse)
+        {
+            ClearTaxScrollViewContent();
+
+            TaxInfoList taxInfoList = JsonUtility.FromJson<TaxInfoList>(jsonResponse);
+            taxCount.text = $"{taxInfoList.allCount}건";
+
+            LoadData(taxInfoList);
+        }
+
+        private void ClearTaxScrollViewContent()
+        {
+            foreach (Transform child in taxScrollViewContent)
+            {
+                Destroy(child.gameObject);
+            }
+        }
+
+        private void LoadData(TaxInfoList taxInfoList)
+        {
+            string etaxUrlAdd = $"pay_link/SM/q_title//checkable/Y/tax_info/{taxInfoList.allCount}";
+
+            foreach (TaxInfo taxInfo in taxInfoList.taxInf)
+            {
+                GameObject taxInformationItem = Instantiate(taxInquiryitem, taxScrollViewContent);
+                GameObject taxInformationText = taxInformationItem.transform.GetChild(0).gameObject;
+                SetTaxInformationTextValues(taxInformationText, taxInfo);
+                etaxUrlAdd += $"@@{taxInfo.tpayNo}@@{taxInfo.validAmt}";
+            }
+
+            ETAXUrl += etaxUrlAdd;
+        }
+
+        private void SetTaxInformationTextValues(GameObject taxInformationItem, TaxInfo taxInfo)
+        {
+            TMP_Text[] values = taxInformationItem.GetComponentsInChildren<TMP_Text>();
+            values[0].text = taxInfo.tpayNo;
+            values[1].text = taxInfo.epayNo;
+            values[2].text = taxInfo.validAmt;
+        }
+
+        private void InquiryListOpenButtonClick() => TogglePanel();
+
+        private void TogglePanel()
+        {
+            if (!isListOpen)
+            {
+                paymentListPanel.gameObject.SetActive(true);
+            }
+
+            AdjustPanelSizeAndRotation();
+        }
+
+        private void AdjustPanelSizeAndRotation()
+        {
+            float targetHeight = isListOpen ? 0 : paymentListPanelOriginalPosition;
+            Vector2 newSize = new Vector2(paymentListPanel.sizeDelta.x, targetHeight);
+
+            float rotationAngle = !isListOpen ? -90 : -180;
+            Vector3 rotation = listOpenImage.localEulerAngles;
+            rotation.z = rotationAngle;
+
+            AnimatePanelAdjustments(newSize, rotation);
+        }
+
+        private void AnimatePanelAdjustments(Vector2 newSize, Vector3 rotation)
+        {
+            listOpenImage.DORotate(rotation, 0.5f);
+            paymentListPanel.DOSizeDelta(newSize, 0.5f).SetEase(Ease.OutQuad).OnComplete(PanelOnOff);
+        }
+
+        private void PanelOnOff()
+        {
+            isListOpen = !isListOpen;
+            paymentListPanel.gameObject.SetActive(isListOpen);
+        }
+
+        private void TaxPaymentWebViewOpen() => OpenTaxPaymentWebView();
+
+        private void OpenTaxPaymentWebView()
+        {
+            webViewObject.gameObject.SetActive(true);
+            StartCoroutine(webViewObject.ETAXPaymentWebView(ETAXUrl));
+            gameObject.SetActive(false);
+            //eTaxServicePanel.SetActive(false);
+        }
+
+        [System.Serializable]
+        private class TaxInfo
+        {
+            public string validAmt;
+            public string epayNo;
+            public string tpayNo;
+            public string gubun;
+        }
+
+        [System.Serializable]
+        private class TaxInfoList
+        {
+            public int allCount;
+            public TaxInfo[] taxInf;
+        }
+    }
+}
+```
