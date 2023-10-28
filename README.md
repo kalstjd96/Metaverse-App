@@ -6,7 +6,7 @@
 ## Features (담당 기능)
 
 -   [QR을 통한 딥링크 기능 구현](#qr-deeklink)
--   [Graph Viewer 구현](#graphicsLine-setting)
+-   [월드맵 기능 구현](#world-map)
     
 ## QR DeepLink
 
@@ -190,7 +190,7 @@ namespace SCM.Service.TaxSquare.ModelTaxPlayer
 }
 ```
 
-## GraphicsLine Setting
+## World Map
 
 >사용된 스크립트<br/>
 > GraphicsLineRenderer.cs 
@@ -198,190 +198,155 @@ namespace SCM.Service.TaxSquare.ModelTaxPlayer
 데이터를 기반으로 Line Graph Viewer 기능을 구현하였습니다.
 ```c#
 
-[RequireComponent(typeof(MeshRenderer))]
-[RequireComponent(typeof(MeshFilter))]
-public class GraphicsLineRenderer : MonoBehaviour
+namespace SCM.Service.TaxSquare.Common.TaxWorldMap
 {
-    public Material lmat;
-    private Mesh ml;
-    private Vector3 s;
-
-    private float lineSize = 0.1f;
-    private bool firstQuad = true;
-
-    public void SetMesh(Mesh ml)
+    public class WorldMapController : MonoBehaviour
     {
-        GetComponent<MeshFilter>().mesh = ml;
-    }
+        private IWorldMapState worldMapState;
+        public TaxWorldMapInfo taxWorldMapInfo;
 
-    public void SetMaterial(Material lmat)
-    {
-        GetComponent<MeshRenderer>().material = lmat;
-    }
+        public event Action OnWorldMapCanvasOpened;
+        ...
 
-    public void setWidth(float width)
-    {
-        lineSize = width;
-    }
-
-    public void AddPoint(Vector3 point)
-    {
-        if (s != Vector3.zero)
+        private void Awake()
         {
-            AddLine(GetComponent<MeshFilter>().mesh, MakeQuad(s, point, lineSize, firstQuad));
-            firstQuad = false;
+            Init();
         }
 
-        s = point;
-    }
-
-    Vector3[] MakeQuad(Vector3 s, Vector3 e, float w, bool all)
-    {
-        w = w / 2;
-
-        Vector3[] q;
-        if (all)
+        private void Init()
         {
-            q = new Vector3[4];
-        }
-        else
-        {
-            q = new Vector3[2];
+            ResetEvent();
+            tZoneCloseButton.onClick.AddListener(() => OnClicktZoneCloseButton?.Invoke());
+            aZoneCloseButton.onClick.AddListener(() => OnClickaZoneCloseButton?.Invoke());
+            xZoneCloseButton.onClick.AddListener(() => OnClickxZoneCloseButton?.Invoke());
+            ...
+            BindEvent();
         }
 
-        Vector3 n = Vector3.Cross(s, e);
-        Vector3 l = Vector3.Cross(n, e - s);
-        l.Normalize();
-
-        if (all)
+        public void ResetEvent()
         {
-            q[0] = transform.InverseTransformPoint(s + l * w);
-            q[1] = transform.InverseTransformPoint(s + l * -w);
-            q[2] = transform.InverseTransformPoint(e + l * w);
-            q[3] = transform.InverseTransformPoint(e + l * -w);
-        }
-        else
-        {
-            q[0] = transform.InverseTransformPoint(s + l * w);
-            q[1] = transform.InverseTransformPoint(s + l * -w);
-        }
-        return q;
-    }
-
-    void AddLine(Mesh m, Vector3[] quad)
-    {
-        int vl = m.vertices.Length;
-
-        Vector3[] vs = m.vertices;
-        vs = resizeVertices(vs, 2 * quad.Length);
-
-        for (int i = 0; i < 2 * quad.Length; i += 2)
-        {
-            vs[vl + i] = quad[i / 2];
-            vs[vl + i + 1] = quad[i / 2];
+            tZoneCloseButton.onClick.RemoveAllListeners();
+            aZoneCloseButton.onClick.RemoveAllListeners();
+            xZoneCloseButton.onClick.RemoveAllListeners();
+            ...
         }
 
-        Vector2[] uvs = m.uv;
-        uvs = resizeUVs(uvs, 2 * quad.Length);
-
-        if (quad.Length == 4)
+        private void BindEvent()
         {
-            uvs[vl] = Vector2.zero;
-            uvs[vl + 1] = Vector2.zero;
-            uvs[vl + 2] = Vector2.right;
-            uvs[vl + 3] = Vector2.right;
-            uvs[vl + 4] = Vector2.up;
-            uvs[vl + 5] = Vector2.up;
-            uvs[vl + 6] = Vector2.one;
-            uvs[vl + 7] = Vector2.one;
+            OnClicktZoneCloseButton += OnClickCloseButton;
+            OnClickaZoneCloseButton += OnClickCloseButton;
+            OnClickxZoneCloseButton += OnClickCloseButton;
+            ...
         }
-        else
+
+        public void SetState(SCENE state, bool isOpen)
         {
-            if (vl % 8 == 0)
+            if (!isOpen)
             {
-                uvs[vl] = Vector2.zero;
-                uvs[vl + 1] = Vector2.zero;
-                uvs[vl + 2] = Vector2.right;
-                uvs[vl + 3] = Vector2.right;
-
+                CloseTaxWorldMapCanvas();
+                return;
             }
             else
             {
-                uvs[vl] = Vector2.up;
-                uvs[vl + 1] = Vector2.up;
-                uvs[vl + 2] = Vector2.one;
-                uvs[vl + 3] = Vector2.one;
+                int currentScene = (int)state;
+
+                if (currentScene >= 60001 && currentScene <= 60030)
+                {
+                    // SCENE.TaxCity_Tzone
+                    currentCanvas = tZoneWorldMapPanel;
+                    worldMapState = new TZoneWorldMapState(this, taxWorldMapInfo, tZoneWorldMapPanel, onClickScene);
+                }
+                ...
+
+                ShowWorldMap();
             }
+
         }
 
-        int tl = m.triangles.Length;
-
-        int[] ts = m.triangles;
-        ts = resizeTriangles(ts, 12);
-
-        if (quad.Length == 2)
+        public void OnClickCloseButton()
         {
-            vl -= 4;
+            CommonUIPopup.Instance.OpenTotalWorldMapCanvas(false);
+            currentCanvas.enabled = false;
         }
 
-        // front-facing quad
-        ts[tl] = vl;
-        ts[tl + 1] = vl + 2;
-        ts[tl + 2] = vl + 4;
-
-        ts[tl + 3] = vl + 2;
-        ts[tl + 4] = vl + 6;
-        ts[tl + 5] = vl + 4;
-
-        // back-facing quad
-        ts[tl + 6] = vl + 5;
-        ts[tl + 7] = vl + 3;
-        ts[tl + 8] = vl + 1;
-
-        ts[tl + 9] = vl + 5;
-        ts[tl + 10] = vl + 7;
-        ts[tl + 11] = vl + 3;
-
-        m.vertices = vs;
-        m.uv = uvs;
-        m.triangles = ts;
-        m.RecalculateBounds();
-        m.RecalculateNormals();
-    }
-
-    Vector3[] resizeVertices(Vector3[] ovs, int ns)
-    {
-        Vector3[] nvs = new Vector3[ovs.Length + ns];
-        for (int i = 0; i < ovs.Length; i++)
+        public void OnClickSpaceViewButton()
         {
-            nvs[i] = ovs[i];
+            CommonUIPopup.Instance.OpenWorldMapCanvas(false);
+            CommonUIPopup.Instance.OpenSpaceSelectCanvas(true);
+            currentCanvas.enabled = false;
         }
 
-        return nvs;
-    }
-
-    Vector2[] resizeUVs(Vector2[] uvs, int ns)
-    {
-        Vector2[] nvs = new Vector2[uvs.Length + ns];
-        for (int i = 0; i < uvs.Length; i++)
+        public void SceneMoveEvent()
         {
-            nvs[i] = uvs[i];
+            currentCanvas.enabled = false;
+            SceneLoadManager.Instance.LoadScene(worldMapState.onClickScene);
+            CommonUIPopup.Instance.OpenTotalWorldMapCanvas(false);
         }
 
-        return nvs;
-    }
-
-    int[] resizeTriangles(int[] ovs, int ns)
-    {
-        int[] nvs = new int[ovs.Length + ns];
-        for (int i = 0; i < ovs.Length; i++)
+        public void ShowWorldMap()
         {
-            nvs[i] = ovs[i];
+            worldMapState.ShowWorldMap();
         }
 
-        return nvs;
+        public void CloseTaxWorldMapCanvas()
+        {
+            if (currentCanvas != null)
+                currentCanvas.enabled = false;
+        }
     }
 }
+
+namespace SCM.Service.TaxSquare.Common.TaxWorldMap
+{
+    public class AZoneWorldMapState : IWorldMapState
+    {
+        private WorldMapController controller;
+        private TaxWorldMapInfo taxWorldMapInfo;
+        private Canvas canvas;
+
+        public SCENE onClickScene { get; private set; }
+
+        SCENE IWorldMapState.onClickScene
+        {
+            get { return onClickScene; }
+            set { onClickScene = value; }
+        }
+
+        public AZoneWorldMapState(WorldMapController controller, TaxWorldMapInfo taxWorldMapInfo, Canvas targetCanvas, SCENE onClickScene)
+        {
+            this.controller = controller;
+            this.taxWorldMapInfo = taxWorldMapInfo;
+            this.canvas = targetCanvas;
+            this.onClickScene = onClickScene;
+        }
+
+        public void ShowWorldMap()
+        {
+            canvas.enabled = true;
+            CommonUIPopup.Instance.OpenSpaceSelectCanvas(false);
+            HandlePointClick(canvas);
+        }
+
+        public void HandlePointClick(Canvas targetPanel)
+        {
+            WorldMapPointUIItem[] mapPointItems = targetPanel.GetComponentsInChildren<WorldMapPointUIItem>();
+
+            for (int i = 0; i < mapPointItems.Length; i++)
+            {
+                mapPointItems[i].GetComponent<Button>().onClick.RemoveAllListeners();
+                mapPointItems[i].SetTaxItem(taxWorldMapInfo.azoneMapPoints[i], OnPointClick);
+            }
+        }
+        public void OnPointClick(TaxMapPoint arg0)
+        {
+            controller.aZoneThumbnailImage.sprite = arg0.thumbnail;
+            controller.aZonePointTitleText.text = arg0.pointName;
+            controller.aZonePointInfoText.text = arg0.description;
+            onClickScene = arg0.targetScene;
+        }
+    }
+}
+
 
 ```
 ![GraphViewer](https://github.com/kalstjd96/Unity_CyberPlantAR/assets/47016363/4a15b007-6a0b-413e-bb4d-35d637f9f657)
