@@ -19,6 +19,11 @@ AppFlyer를 통한 딥링크 기능 구현을 담당하였습니다. (ThirdParty
 
 ```c#
 
+![image](https://github.com/user-attachments/assets/5901825d-0b5a-41bf-b53c-80269ac2c5a9)
+
+https://github.com/user-attachments/assets/eef49f26-d1a1-4345-aa8c-8b4ac60ba92c
+
+
 namespace SCM.Service.TaxSquare.ModelTaxPlayer
 {
     public class TaxDeepLinkManager : MonoBehaviour
