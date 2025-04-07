@@ -22,7 +22,9 @@
 <br>
 <br>
 
-https://github.com/user-attachments/assets/fd47b6c0-f4b6-48c4-b054-4796b8ba6492
+모범납세자 인증 영상 : https://github.com/user-attachments/assets/fd47b6c0-f4b6-48c4-b054-4796b8ba6492
+<br>
+
 AppFlyer를 통한 딥링크 기능 구현을 담당하였습니다. (ThirdParty)
 
 ```c#
